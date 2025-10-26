@@ -556,7 +556,9 @@ class AgentOS:
         from agno.db.base import AsyncBaseDb, BaseDb
 
         dbs: Dict[str, List[Union[BaseDb, AsyncBaseDb]]] = {}
-        knowledge_dbs: Dict[str, List[Union[BaseDb, AsyncBaseDb]]] = {}  # Track databases specifically used for knowledge
+        knowledge_dbs: Dict[
+            str, List[Union[BaseDb, AsyncBaseDb]]
+        ] = {}  # Track databases specifically used for knowledge
 
         for agent in self.agents or []:
             if agent.db:
