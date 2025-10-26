@@ -52,7 +52,7 @@ def get_session_router(
     return attach_routes(router=session_router, dbs=dbs)
 
 
-def attach_routes(router: APIRouter, dbs: dict[str, Union[BaseDb, AsyncBaseDb]]) -> APIRouter:
+def attach_routes(router: APIRouter, dbs: dict[str, list[Union[BaseDb, AsyncBaseDb]]]) -> APIRouter:
     @router.get(
         "/sessions",
         response_model=PaginatedResponse[SessionSchema],

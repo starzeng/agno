@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 def get_metrics_router(
-    dbs: dict[str, Union[BaseDb, AsyncBaseDb]], settings: AgnoAPISettings = AgnoAPISettings(), **kwargs
+    dbs: dict[str, list[Union[BaseDb, AsyncBaseDb]]], settings: AgnoAPISettings = AgnoAPISettings(), **kwargs
 ) -> APIRouter:
     """Create metrics router with comprehensive OpenAPI documentation for system metrics and analytics endpoints."""
     router = APIRouter(
@@ -39,7 +39,7 @@ def get_metrics_router(
     return attach_routes(router=router, dbs=dbs)
 
 
-def attach_routes(router: APIRouter, dbs: dict[str, Union[BaseDb, AsyncBaseDb]]) -> APIRouter:
+def attach_routes(router: APIRouter, dbs: dict[str, list[Union[BaseDb, AsyncBaseDb]]]) -> APIRouter:
     @router.get(
         "/metrics",
         response_model=MetricsResponse,

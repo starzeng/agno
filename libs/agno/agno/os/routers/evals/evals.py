@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 
 def get_eval_router(
-    dbs: dict[str, Union[BaseDb, AsyncBaseDb]],
+    dbs: dict[str, list[Union[BaseDb, AsyncBaseDb]]],
     agents: Optional[List[Agent]] = None,
     teams: Optional[List[Team]] = None,
     settings: AgnoAPISettings = AgnoAPISettings(),
@@ -56,7 +56,7 @@ def get_eval_router(
 
 def attach_routes(
     router: APIRouter,
-    dbs: dict[str, Union[BaseDb, AsyncBaseDb]],
+    dbs: dict[str, list[Union[BaseDb, AsyncBaseDb]]],
     agents: Optional[List[Agent]] = None,
     teams: Optional[List[Team]] = None,
 ) -> APIRouter:

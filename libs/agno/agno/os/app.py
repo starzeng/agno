@@ -556,7 +556,7 @@ class AgentOS:
         from agno.db.base import AsyncBaseDb, BaseDb
 
         dbs: Dict[str, List[Union[BaseDb, AsyncBaseDb]]] = {}
-        knowledge_dbs: Dict[str, Union[BaseDb, AsyncBaseDb]] = {}  # Track databases specifically used for knowledge
+        knowledge_dbs: Dict[str, List[Union[BaseDb, AsyncBaseDb]]] = {}  # Track databases specifically used for knowledge
 
         for agent in self.agents or []:
             if agent.db:
@@ -599,7 +599,7 @@ class AgentOS:
         return {k: v for k, v in table_names.items() if v is not None}
 
     def _register_db_with_validation(
-        self, registered_dbs: Dict[str, List[Union[BaseDb, AsyncBaseDb]]], db: BaseDb
+        self, registered_dbs: Dict[str, List[Union[BaseDb, AsyncBaseDb]]], db: Union[BaseDb, AsyncBaseDb]
     ) -> None:
         """Register a database in the contextual OS after validating it is not conflicting with registered databases"""
         if db.id in registered_dbs:
@@ -663,7 +663,7 @@ class AgentOS:
             memory_config.dbs = []
 
         dbs_with_specific_config = [db.db_id for db in memory_config.dbs]
-        
+
         for db_id, dbs in self.dbs.items():
             if db_id not in dbs_with_specific_config:
                 # Collect unique table names from all databases with the same id
@@ -705,7 +705,7 @@ class AgentOS:
             metrics_config.dbs = []
 
         dbs_with_specific_config = [db.db_id for db in metrics_config.dbs]
-        
+
         for db_id, dbs in self.dbs.items():
             if db_id not in dbs_with_specific_config:
                 # Collect unique table names from all databases with the same id
@@ -727,7 +727,7 @@ class AgentOS:
             evals_config.dbs = []
 
         dbs_with_specific_config = [db.db_id for db in evals_config.dbs]
-        
+
         for db_id, dbs in self.dbs.items():
             if db_id not in dbs_with_specific_config:
                 # Collect unique table names from all databases with the same id

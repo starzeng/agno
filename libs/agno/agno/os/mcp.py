@@ -57,7 +57,7 @@ def get_mcp_server(
             os_id=os.id or "AgentOS",
             description=os.description,
             available_models=os.config.available_models if os.config else [],
-            databases=[db.id for db in os.dbs.values()],
+            databases=[db.id for db_list in os.dbs.values() for db in db_list],
             chat=os.config.chat if os.config else None,
             session=os._get_session_config(),
             memory=os._get_memory_config(),

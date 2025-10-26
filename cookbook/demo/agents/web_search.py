@@ -7,7 +7,14 @@ from agno.tools.firecrawl import FirecrawlTools
 
 # ************* Database Setup *************
 db_url = "postgresql+psycopg://ai:ai@localhost:5532/ai"
-db = PostgresDb(db_url, id="agno_assist_db2")
+db = PostgresDb(
+    db_url,
+    id="agno_assist_db",
+    session_table="web_search_sessions",
+    memory_table="web_search_memories",
+    metrics_table="web_search_metrics",
+    eval_table="web_search_evals",
+)
 # *******************************
 
 

@@ -44,21 +44,18 @@ def get_db(
         target_db_list = dbs.get(db_id)
         if not target_db_list:
             raise HTTPException(status_code=404, detail=f"No database found with id '{db_id}'")
-        
+
         target_db = next((db for db in target_db_list if db.id == db_id), None)
         if not target_db:
             raise HTTPException(status_code=404, detail=f"No database found with id '{db_id}'")
-        
+
         # If table is also specified, check if this specific database has that table
         if table:
             if _has_table(target_db, table):
                 return target_db
             else:
-                raise HTTPException(
-                    status_code=404, 
-                    detail=f"Database with id '{db_id}' does not have table '{table}'"
-                )
-        
+                raise HTTPException(status_code=404, detail=f"Database with id '{db_id}' does not have table '{table}'")
+
         # Return the database found by ID
         return target_db
 
