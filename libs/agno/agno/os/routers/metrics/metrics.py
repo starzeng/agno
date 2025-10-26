@@ -99,7 +99,7 @@ def attach_routes(router: APIRouter, dbs: dict[str, Union[BaseDb, AsyncBaseDb]])
             default=None, description="Ending date for metrics range (YYYY-MM-DD format)"
         ),
         db_id: Optional[str] = Query(default=None, description="Database ID to query metrics from"),
-        table: Optional[str] = Query(default=None, description="Table to query metrics from"),
+        table: Optional[str] = Query(default=None, description="The database table to use"),
     ) -> MetricsResponse:
         try:
             db = get_db(dbs, db_id, table)

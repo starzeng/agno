@@ -24,38 +24,60 @@ def get_db(
 ) -> Union[BaseDb, AsyncBaseDb]:
     """Return the database with the given ID and/or table, or the first database if no ID/table is provided."""
 
-    # If table is specified, find the database that has this table name
+    def _has_table(db: Union[BaseDb, AsyncBaseDb], table_name: str) -> bool:
+        """Check if this database has the specified table name in any of its table attributes."""
+        return (
+            hasattr(db, "session_table_name")
+            and db.session_table_name == table_name
+            or hasattr(db, "memory_table_name")
+            and db.memory_table_name == table_name
+            or hasattr(db, "metrics_table_name")
+            and db.metrics_table_name == table_name
+            or hasattr(db, "eval_table_name")
+            and db.eval_table_name == table_name
+            or hasattr(db, "knowledge_table_name")
+            and db.knowledge_table_name == table_name
+        )
+
+    # If db_id is provided, first find the database with that ID
+    if db_id:
+        target_db_list = dbs.get(db_id)
+        if not target_db_list:
+            raise HTTPException(status_code=404, detail=f"No database found with id '{db_id}'")
+        
+        target_db = next((db for db in target_db_list if db.id == db_id), None)
+        if not target_db:
+            raise HTTPException(status_code=404, detail=f"No database found with id '{db_id}'")
+        
+        # If table is also specified, check if this specific database has that table
+        if table:
+            if _has_table(target_db, table):
+                return target_db
+            else:
+                raise HTTPException(
+                    status_code=404, 
+                    detail=f"Database with id '{db_id}' does not have table '{table}'"
+                )
+        
+        # Return the database found by ID
+        return target_db
+
+    # If only table is specified (no db_id), search all databases for that table
     if table:
         for db_list in dbs.values():
             for db in db_list:
-                # Check if this database has the specified table name in any of its table attributes
-                if (
-                    hasattr(db, "session_table_name")
-                    and db.session_table_name == table
-                    or hasattr(db, "memory_table_name")
-                    and db.memory_table_name == table
-                    or hasattr(db, "metrics_table_name")
-                    and db.metrics_table_name == table
-                    or hasattr(db, "eval_table_name")
-                    and db.eval_table_name == table
-                    or hasattr(db, "knowledge_table_name")
-                    and db.knowledge_table_name == table
-                ):
+                if _has_table(db, table):
                     return db
         raise HTTPException(status_code=404, detail=f"No database found with table '{table}'")
 
     # Raise if multiple databases are provided but no db_id is provided
-    if not db_id and len(dbs) > 1:
+    if len(dbs) > 1:
         raise HTTPException(
             status_code=400, detail="The db_id query parameter is required when using multiple databases"
         )
 
-    # Get and return the database with the given ID, or raise if not found
-    if db_id:
-        db = next(db for db in dbs.get(db_id) if db.id == db_id)
-    else:
-        db = next(db for dbs in dbs.values() for db in dbs)
-    return db
+    # Return the first (and only) database
+    return next(db for dbs in dbs.values() for db in dbs)
 
 
 def get_knowledge_instance_by_db_id(knowledge_instances: List[Knowledge], db_id: Optional[str] = None) -> Knowledge:

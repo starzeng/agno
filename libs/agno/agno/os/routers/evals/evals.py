@@ -115,7 +115,7 @@ def attach_routes(
         sort_by: Optional[str] = Query(default="created_at", description="Field to sort by"),
         sort_order: Optional[SortOrder] = Query(default="desc", description="Sort order (asc or desc)"),
         db_id: Optional[str] = Query(default=None, description="The ID of the database to use"),
-        table: Optional[str] = Query(default=None, description="Table to query eval runs from"),
+        table: Optional[str] = Query(default=None, description="The database table to use"),
     ) -> PaginatedResponse[EvalSchema]:
         db = get_db(dbs, db_id, table)
 
