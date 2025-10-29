@@ -112,7 +112,12 @@ class DynamoDb(BaseDb):
             session = boto3.Session(**session_kwargs)
             self.client = session.client("dynamodb")
 
-    def _create_tables(self):
+    def _get_or_create_tables(self) -> None:
+        """Initialize all required tables for this database.
+        
+        This method ensures all necessary tables exist. It is idempotent
+        and safe to call multiple times without side effects.
+        """
         tables_to_create = [
             (self.session_table_name, "sessions"),
             (self.memory_table_name, "memories"),

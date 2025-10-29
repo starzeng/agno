@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 from functools import partial
 from os import getenv
-from typing import Any, Dict, List, Literal, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 from uuid import uuid4
 
 from fastapi import APIRouter, FastAPI, HTTPException
@@ -551,7 +551,7 @@ class AgentOS:
         }
 
     def _auto_discover_databases(self) -> None:
-        """Auto-discover the databases used by all contextual agents, teams and workflows."""
+        """Auto-discover and initialize the databases used by all contextual agents, teams and workflows."""
 
         from agno.db.base import AsyncBaseDb, BaseDb
 
@@ -588,6 +588,203 @@ class AgentOS:
 
         self.dbs = dbs
         self.knowledge_dbs = knowledge_dbs
+
+        # Initialize/scaffold all discovered databases
+        self._initialize_databases()
+
+    def _initialize_databases(self) -> None:
+        """Initialize/scaffold all discovered databases by ensuring their tables are created."""
+        import asyncio
+        from agno.db.base import AsyncBaseDb, BaseDb
+        from agno.utils.log import log_debug, log_info, log_warning
+
+        all_dbs: List[Union[BaseDb, AsyncBaseDb]] = []
+        
+        # Collect all unique database instances
+        for db_list in self.dbs.values():
+            all_dbs.extend(db_list)
+        for db_list in self.knowledge_dbs.values():
+            all_dbs.extend(db_list)
+        
+        # Remove duplicates by database id
+        unique_dbs: Dict[str, Union[BaseDb, AsyncBaseDb]] = {}
+        for db in all_dbs:
+            if db.id not in unique_dbs:
+                unique_dbs[db.id] = db
+        
+        # Separate sync and async databases
+        sync_dbs = [(db_id, db) for db_id, db in unique_dbs.items() if not isinstance(db, AsyncBaseDb)]
+        async_dbs = [(db_id, db) for db_id, db in unique_dbs.items() if isinstance(db, AsyncBaseDb)]
+        
+        log_info(f"Initializing {len(unique_dbs)} database(s) ({len(sync_dbs)} sync, {len(async_dbs)} async)...")
+        
+        # Initialize sync databases using unified interface
+        for db_id, db in sync_dbs:
+            try:
+                log_debug(f"Initializing {db.__class__.__name__} (id: {db_id})")
+                
+                # Use unified _get_or_create_tables() method
+                if hasattr(db, "_get_or_create_tables") and callable(getattr(db, "_get_or_create_tables")):
+                    db._get_or_create_tables()
+                    log_info(f"✓ Initialized tables for {db.__class__.__name__}")
+                else:
+                    # Fallback to legacy method for databases not yet refactored
+                    log_debug(f"Using legacy initialization for {db.__class__.__name__}")
+                    self._initialize_sync_db_legacy(db_id, db)
+                    
+            except Exception as e:
+                log_warning(f"Failed to initialize {db.__class__.__name__} (id: {db_id}): {e}")
+        
+        # Initialize async databases using unified interface
+        if async_dbs:
+            asyncio.run(self._initialize_async_dbs(async_dbs))
+    
+    def _initialize_sync_db_legacy(self, db_id: str, db) -> None:
+        """Initialize a single synchronous database using legacy methods (fallback for databases not yet refactored)."""
+        from agno.utils.log import log_debug, log_info, log_warning
+        import inspect
+        
+        try:
+            log_debug(f"Checking database: {db.__class__.__name__} (id: {db_id})")
+            
+            # Check if database has a _create_tables method (DynamoDB, SurrealDB style)
+            if hasattr(db, "_create_tables") and callable(getattr(db, "_create_tables")):
+                log_debug(f"Calling _create_tables() for {db.__class__.__name__}")
+                db._create_tables()
+                log_info(f"✓ Initialized tables for {db.__class__.__name__}")
+            
+            # For SQLAlchemy-based databases (Postgres, MySQL, SQLite), trigger table creation
+            # by accessing each table type through _get_or_create_table
+            elif hasattr(db, "_get_or_create_table") and callable(getattr(db, "_get_or_create_table")):
+                log_debug(f"Initializing tables for {db.__class__.__name__} via _get_or_create_table")
+                
+                # Inspect the method signature to determine required parameters
+                method = getattr(db, "_get_or_create_table")
+                sig = inspect.signature(method)
+                params = list(sig.parameters.keys())
+                requires_db_schema = "db_schema" in params
+                
+                table_configs = [
+                    (db.session_table_name, "sessions"),
+                    (db.memory_table_name, "memories"),
+                    (db.metrics_table_name, "metrics"),
+                    (db.eval_table_name, "evals"),
+                    (db.knowledge_table_name, "knowledge_sources"),
+                ]
+                
+                for table_name, table_type in table_configs:
+                    if table_name:
+                        try:
+                            log_debug(f"  Ensuring table '{table_name}' exists...")
+                            
+                            # Build kwargs based on database type
+                            kwargs = {
+                                "table_name": table_name,
+                                "table_type": table_type,
+                            }
+                            
+                            # Add db_schema for Postgres/MySQL
+                            if requires_db_schema and hasattr(db, "db_schema"):
+                                kwargs["db_schema"] = db.db_schema
+                            
+                            # Add create_table_if_not_found if supported
+                            if "create_table_if_not_found" in params:
+                                kwargs["create_table_if_not_found"] = True
+                            
+                            db._get_or_create_table(**kwargs)
+                            
+                        except Exception as table_error:
+                            log_warning(f"  Failed to create table '{table_name}': {table_error}")
+                
+                log_info(f"✓ Initialized tables for {db.__class__.__name__}")
+            
+            else:
+                log_debug(f"No table initialization method found for {db.__class__.__name__}, skipping")
+                
+        except Exception as e:
+            log_warning(f"Failed to initialize database {db.__class__.__name__} (id: {db_id}): {e}")
+    
+    async def _initialize_async_dbs(self, async_dbs: List[Tuple[str, Any]]) -> None:
+        """Initialize all async databases using unified interface."""
+        from agno.utils.log import log_debug, log_info, log_warning
+        import inspect
+        
+        for db_id, db in async_dbs:
+            try:
+                log_debug(f"Initializing async {db.__class__.__name__} (id: {db_id})")
+                
+                # Use unified _get_or_create_tables() method
+                if hasattr(db, "_get_or_create_tables") and callable(getattr(db, "_get_or_create_tables")):
+                    method = getattr(db, "_get_or_create_tables")
+                    
+                    # Check if it's an async method
+                    if inspect.iscoroutinefunction(method):
+                        await db._get_or_create_tables()
+                        log_info(f"✓ Initialized async tables for {db.__class__.__name__}")
+                    else:
+                        # If not async, call it synchronously
+                        db._get_or_create_tables()
+                        log_info(f"✓ Initialized tables for {db.__class__.__name__}")
+                else:
+                    # Fallback to legacy method for databases not yet refactored
+                    log_debug(f"Using legacy async initialization for {db.__class__.__name__}")
+                    await self._initialize_async_db_legacy(db_id, db)
+                    
+            except Exception as e:
+                log_warning(f"Failed to initialize async database {db.__class__.__name__} (id: {db_id}): {e}")
+    
+    async def _initialize_async_db_legacy(self, db_id: str, db) -> None:
+        """Initialize a single async database using legacy methods (fallback for databases not yet refactored)."""
+        from agno.utils.log import log_debug, log_info, log_warning
+        import inspect
+        
+        # For async SQLAlchemy-based databases
+        if hasattr(db, "_get_or_create_table") and callable(getattr(db, "_get_or_create_table")):
+            method = getattr(db, "_get_or_create_table")
+            
+            # Check if it's an async method
+            if inspect.iscoroutinefunction(method):
+                log_debug(f"Initializing async tables for {db.__class__.__name__} via _get_or_create_table")
+                
+                # Inspect the method signature to determine required parameters
+                sig = inspect.signature(method)
+                params = list(sig.parameters.keys())
+                requires_db_schema = "db_schema" in params
+                
+                table_configs = [
+                    (db.session_table_name, "sessions"),
+                    (db.memory_table_name, "memories"),
+                    (db.metrics_table_name, "metrics"),
+                    (db.eval_table_name, "evals"),
+                    (db.knowledge_table_name, "knowledge_sources"),
+                ]
+                
+                for table_name, table_type in table_configs:
+                    if table_name:
+                        try:
+                            log_debug(f"  Ensuring async table '{table_name}' exists...")
+                            
+                            # Build kwargs based on database type
+                            kwargs = {
+                                "table_name": table_name,
+                                "table_type": table_type,
+                            }
+                            
+                            # Add db_schema for Postgres/MySQL
+                            if requires_db_schema and hasattr(db, "db_schema"):
+                                kwargs["db_schema"] = db.db_schema
+                            
+                            await db._get_or_create_table(**kwargs)
+                            
+                        except Exception as table_error:
+                            log_warning(f"  Failed to create async table '{table_name}': {table_error}")
+                
+                log_info(f"✓ Initialized async tables for {db.__class__.__name__}")
+            else:
+                # If not async, fall back to sync initialization
+                self._initialize_sync_db_legacy(db_id, db)
+        else:
+            log_debug(f"No table initialization method found for async {db.__class__.__name__}, skipping")
 
     def _get_db_table_names(self, db: BaseDb) -> Dict[str, str]:
         """Get the table names for a database"""
