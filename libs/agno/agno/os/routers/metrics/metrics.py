@@ -102,7 +102,7 @@ def attach_routes(router: APIRouter, dbs: dict[str, list[Union[BaseDb, AsyncBase
         table: Optional[str] = Query(default=None, description="The database table to use"),
     ) -> MetricsResponse:
         try:
-            db = get_db(dbs, db_id, table)
+            db = await get_db(dbs, db_id, table)
             if isinstance(db, AsyncBaseDb):
                 db = cast(AsyncBaseDb, db)
                 metrics, latest_updated_at = await db.get_metrics(starting_date=starting_date, ending_date=ending_date)
@@ -173,7 +173,7 @@ def attach_routes(router: APIRouter, dbs: dict[str, list[Union[BaseDb, AsyncBase
         table: Optional[str] = Query(default=None, description="Table to use for metrics calculation"),
     ) -> List[DayAggregatedMetrics]:
         try:
-            db = get_db(dbs, db_id, table)
+            db = await get_db(dbs, db_id, table)
             if isinstance(db, AsyncBaseDb):
                 db = cast(AsyncBaseDb, db)
                 result = await db.calculate_metrics()

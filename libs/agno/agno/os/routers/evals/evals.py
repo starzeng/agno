@@ -117,7 +117,7 @@ def attach_routes(
         db_id: Optional[str] = Query(default=None, description="The ID of the database to use"),
         table: Optional[str] = Query(default=None, description="The database table to use"),
     ) -> PaginatedResponse[EvalSchema]:
-        db = get_db(dbs, db_id, table)
+        db = await get_db(dbs, db_id, table)
 
         if isinstance(db, AsyncBaseDb):
             db = cast(AsyncBaseDb, db)
@@ -201,7 +201,7 @@ def attach_routes(
         db_id: Optional[str] = Query(default=None, description="The ID of the database to use"),
         table: Optional[str] = Query(default=None, description="Table to query eval run from"),
     ) -> EvalSchema:
-        db = get_db(dbs, db_id, table)
+        db = await get_db(dbs, db_id, table)
         if isinstance(db, AsyncBaseDb):
             db = cast(AsyncBaseDb, db)
             eval_run = await db.get_eval_run(eval_run_id=eval_run_id, deserialize=False)
@@ -229,7 +229,7 @@ def attach_routes(
         table: Optional[str] = Query(default=None, description="Table to use for deletion"),
     ) -> None:
         try:
-            db = get_db(dbs, db_id, table)
+            db = await get_db(dbs, db_id, table)
             if isinstance(db, AsyncBaseDb):
                 db = cast(AsyncBaseDb, db)
                 await db.delete_eval_runs(eval_run_ids=request.eval_run_ids)
@@ -283,7 +283,7 @@ def attach_routes(
         table: Optional[str] = Query(default=None, description="Table to use for rename operation"),
     ) -> EvalSchema:
         try:
-            db = get_db(dbs, db_id, table)
+            db = await get_db(dbs, db_id, table)
             if isinstance(db, AsyncBaseDb):
                 db = cast(AsyncBaseDb, db)
                 eval_run = await db.rename_eval_run(eval_run_id=eval_run_id, name=request.name, deserialize=False)
@@ -342,7 +342,7 @@ def attach_routes(
         db_id: Optional[str] = Query(default=None, description="Database ID to use for evaluation"),
         table: Optional[str] = Query(default=None, description="Table to use for evaluation"),
     ) -> Optional[EvalSchema]:
-        db = get_db(dbs, db_id, table)
+        db = await get_db(dbs, db_id, table)
 
         if eval_run_input.agent_id and eval_run_input.team_id:
             raise HTTPException(status_code=400, detail="Only one of agent_id or team_id must be provided")

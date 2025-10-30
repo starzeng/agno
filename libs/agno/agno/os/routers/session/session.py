@@ -89,6 +89,7 @@ def attach_routes(router: APIRouter, dbs: dict[str, list[Union[BaseDb, AsyncBase
                 },
             },
             400: {"description": "Invalid session type or filter parameters", "model": BadRequestResponse},
+            404: {"description": "Not found", "model": NotFoundResponse},
             422: {"description": "Validation error in query parameters", "model": ValidationErrorResponse},
         },
     )
@@ -111,7 +112,11 @@ def attach_routes(router: APIRouter, dbs: dict[str, list[Union[BaseDb, AsyncBase
         db_id: Optional[str] = Query(default=None, description="Database ID to query sessions from"),
         table: Optional[str] = Query(default=None, description="The database table to use"),
     ) -> PaginatedResponse[SessionSchema]:
-        db = get_db(dbs, db_id, table)
+        try:
+            db = await get_db(dbs, db_id, table)
+        except Exception as e:
+            raise HTTPException(status_code=404, detail=f"{e}")
+
         if hasattr(request.state, "user_id"):
             user_id = request.state.user_id
 
@@ -202,7 +207,7 @@ def attach_routes(router: APIRouter, dbs: dict[str, list[Union[BaseDb, AsyncBase
         ),
         db_id: Optional[str] = Query(default=None, description="Database ID to create session in"),
     ) -> Union[AgentSessionDetailSchema, TeamSessionDetailSchema, WorkflowSessionDetailSchema]:
-        db = get_db(dbs, db_id)
+        db = await get_db(dbs, db_id)
 
         # Get user_id from request state if available (from auth middleware)
         user_id = create_session_request.user_id
@@ -375,7 +380,7 @@ def attach_routes(router: APIRouter, dbs: dict[str, list[Union[BaseDb, AsyncBase
         db_id: Optional[str] = Query(default=None, description="Database ID to query session from"),
         table: Optional[str] = Query(default=None, description="Table to query session from"),
     ) -> Union[AgentSessionDetailSchema, TeamSessionDetailSchema, WorkflowSessionDetailSchema]:
-        db = get_db(dbs, db_id, table)
+        db = await get_db(dbs, db_id, table)
 
         if hasattr(request.state, "user_id"):
             user_id = request.state.user_id
@@ -531,7 +536,7 @@ def attach_routes(router: APIRouter, dbs: dict[str, list[Union[BaseDb, AsyncBase
         db_id: Optional[str] = Query(default=None, description="Database ID to query runs from"),
         table: Optional[str] = Query(default=None, description="Table to query runs from"),
     ) -> List[Union[RunSchema, TeamRunSchema, WorkflowRunSchema]]:
-        db = get_db(dbs, db_id, table)
+        db = await get_db(dbs, db_id, table)
 
         if hasattr(request.state, "user_id"):
             user_id = request.state.user_id
@@ -646,7 +651,7 @@ def attach_routes(router: APIRouter, dbs: dict[str, list[Union[BaseDb, AsyncBase
         user_id: Optional[str] = Query(default=None, description="User ID to query run from"),
         db_id: Optional[str] = Query(default=None, description="Database ID to query run from"),
     ) -> Union[RunSchema, TeamRunSchema, WorkflowRunSchema]:
-        db = get_db(dbs, db_id)
+        db = await get_db(dbs, db_id)
 
         if hasattr(request.state, "user_id"):
             user_id = request.state.user_id
@@ -706,7 +711,7 @@ def attach_routes(router: APIRouter, dbs: dict[str, list[Union[BaseDb, AsyncBase
         db_id: Optional[str] = Query(default=None, description="Database ID to use for deletion"),
         table: Optional[str] = Query(default=None, description="Table to use for deletion"),
     ) -> None:
-        db = get_db(dbs, db_id, table)
+        db = await get_db(dbs, db_id, table)
         if isinstance(db, AsyncBaseDb):
             db = cast(AsyncBaseDb, db)
             await db.delete_session(session_id=session_id)
@@ -742,7 +747,7 @@ def attach_routes(router: APIRouter, dbs: dict[str, list[Union[BaseDb, AsyncBase
         if len(request.session_ids) != len(request.session_types):
             raise HTTPException(status_code=400, detail="Session IDs and session types must have the same length")
 
-        db = get_db(dbs, db_id, table)
+        db = await get_db(dbs, db_id, table)
         if isinstance(db, AsyncBaseDb):
             db = cast(AsyncBaseDb, db)
             await db.delete_sessions(session_ids=request.session_ids)
@@ -846,7 +851,7 @@ def attach_routes(router: APIRouter, dbs: dict[str, list[Union[BaseDb, AsyncBase
         db_id: Optional[str] = Query(default=None, description="Database ID to use for rename operation"),
         table: Optional[str] = Query(default=None, description="Table to use for rename operation"),
     ) -> Union[AgentSessionDetailSchema, TeamSessionDetailSchema, WorkflowSessionDetailSchema]:
-        db = get_db(dbs, db_id, table)
+        db = await get_db(dbs, db_id, table)
         if isinstance(db, AsyncBaseDb):
             db = cast(AsyncBaseDb, db)
             session = await db.rename_session(
@@ -931,7 +936,7 @@ def attach_routes(router: APIRouter, dbs: dict[str, list[Union[BaseDb, AsyncBase
         user_id: Optional[str] = Query(default=None, description="User ID"),
         db_id: Optional[str] = Query(default=None, description="Database ID to use for update operation"),
     ) -> Union[AgentSessionDetailSchema, TeamSessionDetailSchema, WorkflowSessionDetailSchema]:
-        db = get_db(dbs, db_id)
+        db = await get_db(dbs, db_id)
 
         if hasattr(request.state, "user_id"):
             user_id = request.state.user_id

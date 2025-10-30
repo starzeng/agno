@@ -19,25 +19,35 @@ from agno.utils.log import logger
 from agno.workflow.workflow import Workflow
 
 
-def get_db(
+async def get_db(
     dbs: dict[str, list[Union[BaseDb, AsyncBaseDb]]], db_id: Optional[str] = None, table: Optional[str] = None
 ) -> Union[BaseDb, AsyncBaseDb]:
     """Return the database with the given ID and/or table, or the first database if no ID/table is provided."""
-
-    def _has_table(db: Union[BaseDb, AsyncBaseDb], table_name: str) -> bool:
-        """Check if this database has the specified table name in any of its table attributes."""
-        return (
-            hasattr(db, "session_table_name")
-            and db.session_table_name == table_name
-            or hasattr(db, "memory_table_name")
-            and db.memory_table_name == table_name
-            or hasattr(db, "metrics_table_name")
-            and db.metrics_table_name == table_name
-            or hasattr(db, "eval_table_name")
-            and db.eval_table_name == table_name
-            or hasattr(db, "knowledge_table_name")
-            and db.knowledge_table_name == table_name
+    async def _has_table(db: Union[BaseDb, AsyncBaseDb], table_name: str) -> bool:
+        """Check if this database has the specified table (configured and actually exists)."""
+        # First check if table name is configured
+        is_configured = (
+            hasattr(db, "session_table_name") and db.session_table_name == table_name
+            or hasattr(db, "memory_table_name") and db.memory_table_name == table_name
+            or hasattr(db, "metrics_table_name") and db.metrics_table_name == table_name
+            or hasattr(db, "eval_table_name") and db.eval_table_name == table_name
+            or hasattr(db, "knowledge_table_name") and db.knowledge_table_name == table_name
         )
+        
+        if not is_configured:
+            return False
+        
+        # Then check if table actually exists in the database
+        try:
+            if isinstance(db, AsyncBaseDb):
+                # For async databases, await the check
+                return await db.table_exists(table_name)
+            else:
+                # For sync databases, call directly
+                return db.table_exists(table_name)
+        except (NotImplementedError, AttributeError):
+            # If table_exists not implemented, fall back to configuration check
+            return is_configured
 
     # If db_id is provided, first find the database with that ID
     if db_id:
@@ -45,25 +55,21 @@ def get_db(
         if not target_db_list:
             raise HTTPException(status_code=404, detail=f"No database found with id '{db_id}'")
 
-        target_db = next((db for db in target_db_list if db.id == db_id), None)
-        if not target_db:
-            raise HTTPException(status_code=404, detail=f"No database found with id '{db_id}'")
-
-        # If table is also specified, check if this specific database has that table
+        # If table is also specified, search through all databases with this ID to find one with the table
         if table:
-            if _has_table(target_db, table):
-                return target_db
-            else:
-                raise HTTPException(status_code=404, detail=f"Database with id '{db_id}' does not have table '{table}'")
+            for db in target_db_list:
+                if await _has_table(db, table):
+                    return db
+            raise HTTPException(status_code=404, detail=f"No database with id '{db_id}' has table '{table}'")
 
-        # Return the database found by ID
-        return target_db
+        # If no table specified, return the first database with this ID
+        return target_db_list[0]
 
     # If only table is specified (no db_id), search all databases for that table
     if table:
         for db_list in dbs.values():
             for db in db_list:
-                if _has_table(db, table):
+                if await _has_table(db, table):
                     return db
         raise HTTPException(status_code=404, detail=f"No database found with table '{table}'")
 
